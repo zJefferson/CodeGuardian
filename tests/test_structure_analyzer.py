@@ -204,8 +204,12 @@ def test_analyzes_codeguardian_itself() -> None:
     assert "tests/test_structure_analyzer.py" in report.python_files
     assert ConfigFile(path="pyproject.toml", kind=ConfigKind.PYPROJECT) in report.config_files
     assert report.tests.has_tests is True
-    assert ".venv" in report.ignored_directories
-    assert not any(p.startswith(".venv/") for p in report.python_files)
+    # Não depende do nome do ambiente virtual local (ou de existir um, como em CI):
+    # nenhum arquivo de dependências, cache ou controle de versão entra na lista.
+    ignored = structure_analyzer.IGNORED_DIRECTORIES
+    for path in report.python_files:
+        parts = [part.lower() for part in path.split("/")[:-1]]
+        assert not any(part in ignored for part in parts), path
 
 
 # --- Nenhum código é executado -----------------------------------------------

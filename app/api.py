@@ -132,7 +132,7 @@ JobManagerDep = Annotated[JobManager, Depends(get_job_manager)]
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
-_ERRORS = {
+ERROR_RESPONSES = {
     404: {"model": ErrorResponse, "description": "Análise não encontrada ou expirada."},
     409: {"model": ErrorResponse, "description": "Relatório ainda não disponível."},
     422: {"model": ErrorResponse, "description": "Entrada inválida."},
@@ -148,7 +148,7 @@ def _status_url(job_id: str) -> str:
     "",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=AnalysisAccepted,
-    responses={code: _ERRORS[code] for code in (422, 503)},
+    responses={code: ERROR_RESPONSES[code] for code in (422, 503)},
     summary="Inicia uma análise",
 )
 def start_analysis(
@@ -176,11 +176,11 @@ def start_analysis(
 @router.get(
     "/{analysis_id}",
     response_model=AnalysisStatusResponse,
-    responses={code: _ERRORS[code] for code in (404, 422)},
+    responses={code: ERROR_RESPONSES[code] for code in (404, 422)},
     summary="Consulta o status de uma análise",
 )
 def get_analysis_status(analysis_id: UUID, jobs: JobManagerDep) -> AnalysisStatusResponse:
-    job = _find(jobs, analysis_id)
+    job = find_job(jobs, analysis_id)
     report = job.report
     return AnalysisStatusResponse(
         analysis_id=job.id,
@@ -200,11 +200,11 @@ def get_analysis_status(analysis_id: UUID, jobs: JobManagerDep) -> AnalysisStatu
 @router.get(
     "/{analysis_id}/report",
     response_model=AnalysisReport,
-    responses={code: _ERRORS[code] for code in (404, 409, 422)},
+    responses={code: ERROR_RESPONSES[code] for code in (404, 409, 422)},
     summary="Consulta o relatório JSON de uma análise",
 )
 def get_analysis_report(analysis_id: UUID, jobs: JobManagerDep) -> AnalysisReport:
-    job = _find(jobs, analysis_id)
+    job = find_job(jobs, analysis_id)
     if job.report is not None:
         return job.report
     if job.status is JobStatus.FAILED:
@@ -220,7 +220,7 @@ def get_analysis_report(analysis_id: UUID, jobs: JobManagerDep) -> AnalysisRepor
     )
 
 
-def _find(jobs: JobManager, analysis_id: UUID) -> Job:
+def find_job(jobs: JobManager, analysis_id: UUID) -> Job:
     job = jobs.get(str(analysis_id))
     if job is None:
         raise APIError(

@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.ai_explainer import Explainer, ExplanationResult, FindingKind
 from app.analysis_report import AnalysisReport
-from app.api import _ERRORS, APIError, JobManagerDep, _find
+from app.api import ERROR_RESPONSES, APIError, JobManagerDep, find_job
 from app.jobs import JobStatus
 
 
@@ -65,7 +65,7 @@ def ai_status(explainer: ExplainerDep) -> AIStatusResponse:
 @router.post(
     "/analyses/{analysis_id}/explanations",
     response_model=ExplanationResult,
-    responses={code: _ERRORS[code] for code in (404, 409, 422)},
+    responses={code: ERROR_RESPONSES[code] for code in (404, 409, 422)},
     summary="Explica um achado com IA local (opcional)",
 )
 def explain_finding(
@@ -93,7 +93,7 @@ def explain_finding(
 
 
 def _completed_report(jobs: JobManagerDep, analysis_id: UUID) -> AnalysisReport:
-    job = _find(jobs, analysis_id)
+    job = find_job(jobs, analysis_id)
     if job.report is None:
         code = "analysis_failed" if job.status is JobStatus.FAILED else "analysis_not_ready"
         raise APIError(

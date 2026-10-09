@@ -1,32 +1,109 @@
 # CodeGuardian
 
-Ferramenta para analisar repositórios Git públicos: qualidade de código, verificação de
-dependências, checagens automatizadas e geração de relatórios técnicos.
+Ferramenta para analisar repositórios Git públicos do GitHub: verifica a estrutura do
+projeto, executa análise estática com Ruff, audita dependências com pip-audit e gera um
+relatório técnico consolidado, com pontuação explicável, API REST e interface web.
 
-> Status: API REST para análise de repositórios (estrutura, Ruff e pip-audit), com
-> execução em segundo plano limitada ao ambiente local. Sem autenticação: não exponha
-> publicamente.
+> **Projeto de portfólio para uso local.** A API não tem autenticação e a análise roda no
+> mesmo host da API; não exponha o serviço publicamente sem os controles descritos em
+> [docs/clonagem.md](docs/clonagem.md) e [docs/api.md](docs/api.md).
 
-## Requisitos
+## O problema
 
-- Python 3.12 ou superior (desenvolvido com Python 3.14)
-- Git
+Avaliar rapidamente um repositório de terceiros (qualidade, dependências vulneráveis,
+existência de testes) exige rodar várias ferramentas e interpretar saídas diferentes. E o
+próprio processo é arriscado: o repositório é **código não confiável**, que pode tentar
+executar comandos, acessar a rede interna, esgotar recursos ou enganar quem lê os
+resultados.
 
-## Instalação (Windows / PowerShell)
+O CodeGuardian automatiza essas verificações tratando o repositório estritamente como
+**dado**: nada do repositório é executado fora de um container isolado, nenhuma
+dependência dele é instalada, e os resultados distinguem claramente "sem achados",
+"análise incompleta" e "falha".
+
+## Funcionalidades
+
+- **Validação de URL** com lista de permissões (`https://github.com/<usuário>/<repo>`),
+  bloqueando credenciais, IPs, localhost e endereços internos.
+- **Clonagem controlada**: rasa, sem credenciais do host, sem configurações globais do
+  Git, com limites de tempo, tamanho e saída, e limpeza garantida.
+- **Análise estrutural**: arquivos Python, configurações, testes e documentação, sem
+  seguir links simbólicos.
+- **Análise estática com Ruff**, ignorando a configuração do repositório analisado.
+- **Vulnerabilidades em dependências com pip-audit**, sem instalar nada.
+- **Relatório consolidado em JSON**, com status por verificação, versões das ferramentas,
+  avisos e erros — análises incompletas nunca são aprovadas.
+- **Pontuação explicável** (0–100) com fatores, que fica indisponível quando faltam dados.
+- **API REST assíncrona** (FastAPI) e **interface web** sem dependências de frontend.
+- **Opcionais**, desligados por padrão: execução dos testes do repositório em **container
+  Docker isolado** e **explicações com IA local** (Ollama).
+
+## Arquitetura
+
+```
+Navegador ──► Interface web (app/static) ─┐
+Cliente HTTP ─────────────────────────────┴─► API FastAPI (app/api.py, explanations_api.py)
+                                                 │  POST /analyses → 202 (fila em memória)
+                                                 ▼
+                                          JobManager (app/jobs.py, pool limitado de threads)
+                                                 │
+                                                 ▼
+                              analyze_repository (app/analysis_report.py)
+   repository_url ─► repository_clone ─► structure_analyzer ─► ruff_analyzer ─► dependency_audit
+     (validação)      (git, temporário)    (metadados)          (subprocesso)    (subprocesso)
+                                                 │                    └─► test_runner (Docker, opcional)
+                                                 ▼
+                         AnalysisReport + quality_score ─► JSON / interface
+                                                 └─► ai_explainer (Ollama local, opcional, sob demanda)
+```
+
+Todas as ferramentas externas (Git, Ruff, pip-audit, Docker) rodam por
+`app/process_runner.py`: lista de argumentos sem shell, ambiente mínimo sem segredos,
+timeout e limite de saída. Detalhes por etapa nas seções abaixo e em [docs/](docs/).
+
+## Tecnologias
+
+| Uso | Tecnologia |
+|---|---|
+| Linguagem | Python 3.14 (testado também em 3.13) |
+| API e validação | FastAPI, Uvicorn, Pydantic |
+| Análise | Git, Ruff, pip-audit, packaging |
+| Testes e qualidade | pytest, HTTPX (TestClient), Ruff |
+| Interface | HTML, CSS e JavaScript sem framework |
+| Opcionais | Docker (testes isolados), Ollama (IA local) |
+
+## Instalação (ambiente limpo)
+
+Requisitos: **Python 3.13 ou 3.14** e **Git** no `PATH`. O `pyproject.toml` declara
+Python ≥ 3.12, mas a versão 3.12 não foi testada.
+
+Windows (PowerShell):
 
 ```powershell
-git clone https://github.com/zJefferson/codeguardian.git
-cd codeguardian
+git clone https://github.com/zJefferson/CodeGuardian.git
+cd CodeGuardian
 py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-Copy-Item .env.example .env
 ```
 
-Em Linux/macOS, ative o ambiente com `source .venv/bin/activate`.
+Linux/macOS:
+
+```bash
+git clone https://github.com/zJefferson/CodeGuardian.git
+cd CodeGuardian
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
 O `requirements.txt` fixa todas as versões, incluindo as transitivas, para instalações
 reproduzíveis. As dependências diretas estão declaradas em `pyproject.toml`.
+
+**Configuração.** Nenhuma configuração é necessária para o uso básico. As
+funcionalidades opcionais são ativadas por variáveis de ambiente do processo da API,
+listadas em [.env.example](.env.example). O arquivo `.env` **não é carregado
+automaticamente**: defina as variáveis no terminal antes de iniciar o servidor.
 
 ## Executando a API
 
@@ -51,6 +128,9 @@ Use um único worker: as análises e seus resultados ficam na memória do proces
 | `POST /analyses` | inicia uma análise (`{"repository_url": "https://github.com/..."}`) e responde `202` |
 | `GET /analyses/{analysis_id}` | status: `queued`, `running`, `completed` ou `failed` |
 | `GET /analyses/{analysis_id}/report` | relatório JSON (`409` enquanto não estiver pronto) |
+| `POST /analyses/{analysis_id}/explanations` | explicação de um achado com IA local (opcional) |
+| `GET /ai/status` | indica se as explicações com IA estão habilitadas |
+| `GET /health` | verificação de saúde |
 
 ```powershell
 $r = Invoke-RestMethod -Method Post http://127.0.0.1:8000/analyses -ContentType "application/json" -Body '{"repository_url": "https://github.com/psf/requests"}'
@@ -169,8 +249,9 @@ em [docs/dependencias.md](docs/dependencias.md).
 
 ## Relatório consolidado
 
-`app/analysis_report.py` executa as etapas (validação, clonagem, estrutura, Ruff e
-pip-audit) e consolida os resultados em um `AnalysisReport`:
+`app/analysis_report.py` executa as etapas (validação, clonagem, estrutura, Ruff,
+pip-audit e, se habilitada, execução isolada de testes) e consolida os resultados em um
+`AnalysisReport`, que inclui a pontuação explicável:
 
 ```python
 from pathlib import Path
@@ -196,6 +277,10 @@ contagem de achados, resultados do Ruff e do pip-audit, avisos e erros.
 - **Sem conteúdo sensível.** Sem credenciais (URL canônica), sem saídas brutas das
   ferramentas, sem trechos de código e sem caminhos do servidor; da estrutura entra
   apenas um resumo.
+
+**Exemplo:** [docs/exemplos/relatorio-codeguardian.json](docs/exemplos/relatorio-codeguardian.json)
+é um relatório **real** da análise deste repositório; a origem e a leitura do resultado
+estão em [docs/exemplos/README.md](docs/exemplos/README.md).
 
 ## Interface web
 
@@ -269,6 +354,36 @@ container. Arquitetura, controles, resultados e riscos: [docs/testes-isolados.md
 ```
 app/      código da aplicação (app/static: interface web)
 docker/   imagem do ambiente isolado de testes
-docs/     documentação técnica
+docs/     documentação técnica e exemplo de relatório
 tests/    testes automatizados
 ```
+
+| Documento | Conteúdo |
+|---|---|
+| [docs/api.md](docs/api.md) | endpoints, códigos HTTP, formato de erros, limites da fila |
+| [docs/clonagem.md](docs/clonagem.md) | controles da clonagem, riscos e requisitos para implantação pública |
+| [docs/dependencias.md](docs/dependencias.md) | escopo e limites da auditoria de dependências |
+| [docs/pontuacao.md](docs/pontuacao.md) | fórmula, pesos e exemplo da pontuação |
+| [docs/testes-isolados.md](docs/testes-isolados.md) | arquitetura e riscos da execução isolada de testes |
+| [docs/ia-local.md](docs/ia-local.md) | configuração do Ollama e salvaguardas da IA |
+| [docs/exemplos/](docs/exemplos/) | relatório real de exemplo |
+
+## Limitações conhecidas
+
+- **Uso local.** Sem autenticação nem limite por cliente; a fila e os resultados ficam na
+  memória de um único processo e se perdem ao reiniciar.
+- **Isolamento parcial.** Git, Ruff e pip-audit rodam no mesmo host da API, com
+  controles, mas sem container; só a execução de testes é isolada. Uma queda do processo
+  pode deixar diretórios temporários órfãos.
+- **Apenas GitHub e Python.** Somente repositórios públicos de `github.com`; a análise
+  estática e de dependências cobre projetos Python.
+- **Dependências:** só versões exatas são auditadas; faixas de versão deixam o relatório
+  `incomplete`, e o pip-audit não informa gravidade (CVSS).
+- **Testes do repositório:** sem instalar dependências, a maioria dos projetos reais
+  resulta em erro de coleta. A execução real em Docker e a integração com um modelo
+  Ollama real **não foram validadas** no ambiente de desenvolvimento (validadas com
+  comandos e servidores simulados).
+- **Pontuação:** indicador relativo baseado em regras e pesos escolhidos pelo projeto,
+  não uma medida absoluta de qualidade.
+- **Plataforma:** desenvolvido e testado em Windows 11 com Python 3.13 e 3.14; os
+  comandos para Linux/macOS não foram verificados.

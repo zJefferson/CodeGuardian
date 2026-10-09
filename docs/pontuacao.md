@@ -106,9 +106,9 @@ nota = 100 × aprovados ÷ (aprovados + reprovados + erros)
 - **Indisponível**: ambiente isolado indisponível, erro de coleta, timeout, limite de
   recursos, falha de infraestrutura ou contagens ausentes.
 
-## Exemplo
+## Exemplo ilustrativo
 
-Projeto com 20 arquivos Python, 4 × `F401`, 2 × `S603`, 1 × `E711`; um pacote com 3
+**Dados hipotéticos**, apenas para demonstrar a fórmula. Projeto com 20 arquivos Python, 4 × `F401`, 2 × `S603`, 1 × `E711`; um pacote com 3
 vulnerabilidades; testes e README presentes, lockfile, sem diretório de docs; execução de
 testes desabilitada:
 
