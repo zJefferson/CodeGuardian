@@ -59,9 +59,30 @@ embutidas, endereços IP, `localhost`, query/fragmento, caminhos codificados ou 
 segmentos extras e caracteres não ASCII. As mensagens de erro nunca reproduzem a URL
 recebida. Passar na validação não torna o repositório confiável.
 
+## Clonagem controlada
+
+`app/repository_clone.py` clona um repositório já validado em um diretório
+temporário exclusivo, removido ao final da análise (inclusive em caso de erro):
+
+```python
+from app.repository_clone import cloned_repository
+from app.repository_url import parse_github_repository_url
+
+repo = parse_github_repository_url("https://github.com/psf/requests")
+with cloned_repository(repo) as path:
+    ...  # ler arquivos em `path`; nunca executá-los
+```
+
+A clonagem é rasa (`--depth=1`), sem submódulos, sem credenciais, sem as
+configurações globais do Git e com limites de tempo, tamanho e saída. Nenhum código
+do repositório é executado e nenhuma dependência é instalada. Os controles e os
+riscos restantes estão em [docs/clonagem.md](docs/clonagem.md). **A clonagem ainda
+não roda isolada; não exponha o serviço publicamente sem os controles descritos lá.**
+
 ## Estrutura
 
 ```
 app/      código da aplicação
+docs/     documentação técnica
 tests/    testes automatizados
 ```
