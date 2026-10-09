@@ -38,6 +38,31 @@ dependência dele é instalada, e os resultados distinguem claramente "sem achad
 - **Opcionais**, desligados por padrão: execução dos testes do repositório em **container
   Docker isolado** e **explicações com IA local** (Ollama).
 
+## Capturas de tela
+
+Telas reais da interface web, de uma análise do repositório
+[psf/requests](https://github.com/psf/requests) feita em 09/10/2026 com o CodeGuardian
+0.1.0 (sem dados simulados; execução de testes e IA desabilitadas).
+
+**Tela inicial**
+
+![Formulário para informar a URL do repositório](docs/images/tela-inicial.png)
+
+**Andamento, resumo e status de cada verificação** — a análise fica `incomplete` porque
+24 dependências declaradas com faixas de versão não puderam ser auditadas.
+
+![Andamento, resumo com métricas e tabela de verificações](docs/images/resultado-resumo.png)
+
+**Pontuação explicável** — indisponível neste caso, pois a dimensão de dependências não
+tem cobertura suficiente; as demais dimensões continuam visíveis com seus pesos.
+
+![Pontuação explicável com as dimensões e seus pesos](docs/images/pontuacao.png)
+
+**Achados do Ruff** — regras mais frequentes e lista com arquivo, linha, regra, descrição
+e sugestão, com filtro e paginação.
+
+![Gráfico de regras mais frequentes e tabela de achados do Ruff](docs/images/achados-ruff.png)
+
 ## Arquitetura
 
 ```
