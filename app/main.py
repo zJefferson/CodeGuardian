@@ -12,6 +12,7 @@ from app.analysis_report import AnalysisReport, AnalysisSettings, analyze_reposi
 from app.api import register_error_handlers, router
 from app.jobs import JobManager
 from app.test_runner import TestExecutionSettings
+from app.web import register_web
 
 
 class HealthResponse(BaseModel):
@@ -56,6 +57,7 @@ def create_app(job_manager: JobManager | None = None) -> FastAPI:
         """Indica que a API está em execução."""
         return HealthResponse(status="ok")
 
+    register_web(app)
     return app
 
 

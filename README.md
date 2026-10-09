@@ -36,7 +36,8 @@ Com o ambiente virtual ativado:
 uvicorn app.main:app --reload
 ```
 
-- API: <http://127.0.0.1:8000>
+- Interface web: <http://127.0.0.1:8000/>
+- API: <http://127.0.0.1:8000/analyses>
 - Verificação de saúde: <http://127.0.0.1:8000/health> → `{"status": "ok"}`
 - Documentação interativa (Swagger): <http://127.0.0.1:8000/docs>
 
@@ -196,6 +197,23 @@ contagem de achados, resultados do Ruff e do pip-audit, avisos e erros.
   ferramentas, sem trechos de código e sem caminhos do servidor; da estrutura entra
   apenas um resumo.
 
+## Interface web
+
+Disponível em <http://127.0.0.1:8000/> com a API em execução. É uma página estática
+(HTML, CSS e JavaScript, sem framework nem build) servida pelo próprio FastAPI, que
+consome apenas os endpoints REST:
+
+- formulário com a URL do repositório e mensagens claras de erro de validação;
+- andamento da análise (na fila, em execução, concluída ou falha);
+- resumo, status de cada verificação, pontuação explicável com fatores;
+- achados do Ruff (arquivo, linha, regra, descrição e sugestão) com filtro e paginação;
+- vulnerabilidades e dependências não auditadas;
+- acesso ao relatório JSON (abrir ou baixar).
+
+Recarregar a página mantém a análise pelo identificador no endereço (`/#<id>`).
+O conteúdo do relatório é tratado como não confiável: é exibido somente como texto, links
+só aceitam `https://` e a página usa uma Content Security Policy restrita.
+
 ## Pontuação de qualidade
 
 Cada relatório traz `quality`: uma pontuação de 0 a 100 calculada de forma determinística
@@ -233,7 +251,7 @@ container. Arquitetura, controles, resultados e riscos: [docs/testes-isolados.md
 ## Estrutura
 
 ```
-app/      código da aplicação
+app/      código da aplicação (app/static: interface web)
 docker/   imagem do ambiente isolado de testes
 docs/     documentação técnica
 tests/    testes automatizados

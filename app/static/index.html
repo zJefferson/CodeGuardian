@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CodeGuardian</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 4 7v8c0 7.5 5.1 13.4 12 15 6.9-1.6 12-7.5 12-15V7z' fill='%232563eb'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="wrap topbar-inner">
+        <a class="brand" href="/">
+          <svg class="brand-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 4 7v8c0 7.5 5.1 13.4 12 15 6.9-1.6 12-7.5 12-15V7z"/></svg>
+          CodeGuardian
+        </a>
+        <nav class="topnav" aria-label="Links">
+          <a href="/docs">Documentação da API</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="card" aria-labelledby="form-title">
+        <h1 id="form-title">Analisar repositório</h1>
+        <p class="muted">
+          Informe um repositório público do GitHub. A análise verifica a estrutura do
+          projeto, executa o Ruff e audita as dependências com pip-audit.
+        </p>
+        <form id="analysis-form" class="analysis-form" novalidate>
+          <label for="repository-url">URL do repositório</label>
+          <div class="form-row">
+            <input id="repository-url" name="repository_url" type="url" inputmode="url"
+                   placeholder="https://github.com/usuario/repositorio"
+                   autocomplete="off" spellcheck="false" maxlength="2048" required
+                   aria-describedby="form-error">
+            <button id="submit-button" type="submit" class="button primary">Iniciar análise</button>
+          </div>
+          <p id="form-error" class="message error" role="alert" hidden></p>
+        </form>
+      </section>
+
+      <section id="status-card" class="card" hidden>
+        <div class="status-header">
+          <h2>Andamento</h2>
+          <span id="status-badge" class="badge"></span>
+        </div>
+        <ol id="status-steps" class="steps" aria-label="Etapas da análise">
+          <li data-step="queued">Na fila</li>
+          <li data-step="running">Em execução</li>
+          <li data-step="done">Concluída</li>
+        </ol>
+        <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+        <dl id="status-details" class="details"></dl>
+      </section>
+
+      <div id="results" hidden></div>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap muted">
+        Os resultados refletem apenas as verificações automatizadas executadas.
+        Repositórios analisados são tratados como não confiáveis.
+      </div>
+    </footer>
+  </body>
+</html>
