@@ -3,7 +3,9 @@
 Ferramenta para analisar repositórios Git públicos: qualidade de código, verificação de
 dependências, checagens automatizadas e geração de relatórios técnicos.
 
-> Status: API mínima com verificação de saúde. As análises ainda não foram implementadas.
+> Status: API REST para análise de repositórios (estrutura, Ruff e pip-audit), com
+> execução em segundo plano limitada ao ambiente local. Sem autenticação: não exponha
+> publicamente.
 
 ## Requisitos
 
@@ -39,6 +41,24 @@ uvicorn app.main:app --reload
 - Documentação interativa (Swagger): <http://127.0.0.1:8000/docs>
 
 `--reload` é apenas para desenvolvimento. Por padrão o servidor escuta somente em `127.0.0.1`.
+Use um único worker: as análises e seus resultados ficam na memória do processo.
+
+### Endpoints
+
+| Método e rota | Descrição |
+|---|---|
+| `POST /analyses` | inicia uma análise (`{"repository_url": "https://github.com/..."}`) e responde `202` |
+| `GET /analyses/{analysis_id}` | status: `queued`, `running`, `completed` ou `failed` |
+| `GET /analyses/{analysis_id}/report` | relatório JSON (`409` enquanto não estiver pronto) |
+
+```powershell
+$r = Invoke-RestMethod -Method Post http://127.0.0.1:8000/analyses -ContentType "application/json" -Body '{"repository_url": "https://github.com/psf/requests"}'
+Invoke-RestMethod "http://127.0.0.1:8000$($r.status_url)"
+Invoke-RestMethod "http://127.0.0.1:8000$($r.report_url)"
+```
+
+Códigos HTTP, formato de erros, limites e restrições da execução em segundo plano:
+[docs/api.md](docs/api.md).
 
 ## Testes e verificações
 

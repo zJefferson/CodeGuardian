@@ -403,11 +403,16 @@ def analyze_repository(
     url: str,
     *,
     settings: AnalysisSettings | None = None,
+    analysis_id: str | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> AnalysisReport:
-    """Executa as etapas da análise sobre ``url`` e retorna o relatório consolidado."""
+    """Executa as etapas da análise sobre ``url`` e retorna o relatório consolidado.
+
+    ``analysis_id`` permite usar um identificador já atribuído (ex.: pela API);
+    se omitido, um UUID novo é gerado.
+    """
     settings = settings or AnalysisSettings()
-    analysis_id = str(uuid.uuid4())
+    analysis_id = analysis_id or str(uuid.uuid4())
     started_at = now()
     results = _StepResults()
 
