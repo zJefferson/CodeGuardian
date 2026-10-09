@@ -5,10 +5,12 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from app import __version__
+
 app = FastAPI(
     title="CodeGuardian",
     description="Análise de qualidade, dependências e segurança de repositórios Git públicos.",
-    version="0.1.0",
+    version=__version__,
 )
 
 

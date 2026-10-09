@@ -146,6 +146,36 @@ com ambiente mínimo. **A análise depende das dependências declaradas e das
 informações disponíveis na fonte de vulnerabilidades**; veja o escopo e os limites
 em [docs/dependencias.md](docs/dependencias.md).
 
+## Relatório consolidado
+
+`app/analysis_report.py` executa as etapas (validação, clonagem, estrutura, Ruff e
+pip-audit) e consolida os resultados em um `AnalysisReport`:
+
+```python
+from pathlib import Path
+
+from app.analysis_report import analyze_repository
+
+report = analyze_repository("https://github.com/psf/requests")
+report.overall_status  # no_issues_found | issues_found | nothing_to_analyze | incomplete | failed
+report.approved  # True somente se tudo foi verificado por completo e sem achados
+report.checks  # status de cada verificação: completed | partial | failed | skipped | not_applicable
+report.export_json(Path("relatorio.json"))
+```
+
+O relatório contém identificador, URL canônica, data, duração, versões das
+ferramentas (CodeGuardian, Python, Git, Ruff, pip-audit), status de cada verificação,
+contagem de achados, resultados do Ruff e do pip-audit, avisos e erros.
+
+- **Análises incompletas nunca são aprovadas.** Timeout, falha, fonte de
+  vulnerabilidades indisponível, limite atingido ou dependências não auditadas
+  resultam em `incomplete`.
+- **Nada é presumido.** Etapas que não executaram aparecem como `skipped`; contagens
+  sem resultado são `null`, não zero.
+- **Sem conteúdo sensível.** Sem credenciais (URL canônica), sem saídas brutas das
+  ferramentas, sem trechos de código e sem caminhos do servidor; da estrutura entra
+  apenas um resumo.
+
 ## Estrutura
 
 ```
