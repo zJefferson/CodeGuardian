@@ -79,6 +79,28 @@ do repositório é executado e nenhuma dependência é instalada. Os controles e
 riscos restantes estão em [docs/clonagem.md](docs/clonagem.md). **A clonagem ainda
 não roda isolada; não exponha o serviço publicamente sem os controles descritos lá.**
 
+## Análise estrutural
+
+`app/structure_analyzer.py` examina o diretório clonado usando apenas metadados do
+sistema de arquivos (nenhum arquivo é aberto ou executado):
+
+```python
+from app.structure_analyzer import analyze_structure
+
+report = analyze_structure(path)  # StructureReport (Pydantic)
+report.python_files  # arquivos .py
+report.config_files  # pyproject.toml, requirements*.txt, setup.cfg, pytest.ini...
+report.relevant_directories  # src/, pacotes, tests/, docs/
+report.tests, report.documentation
+report.complete, report.limitations
+```
+
+Diretórios de dependências, caches e controle de versão (`.git`, `.venv`,
+`node_modules`, `__pycache__`, `*.egg-info`...) são ignorados. Links simbólicos e
+junções nunca são seguidos. A varredura tem limites de profundidade e de número de
+arquivos; quando um limite é atingido, `complete` é `False` e o motivo aparece em
+`limitations` (análise incompleta não é o mesmo que ausência de achados).
+
 ## Estrutura
 
 ```
