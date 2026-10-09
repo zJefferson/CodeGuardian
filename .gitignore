@@ -1,0 +1,44 @@
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Bytecode e caches Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Builds e pacotes
+build/
+dist/
+*.egg-info/
+
+# Cobertura de testes
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Variáveis de ambiente reais (o .env.example é versionado)
+.env
+.env.*
+!.env.example
+
+# Relatórios e artefatos gerados pelas análises
+reports/
+*.log
+tmp/
+workspace/
+
+# Editores
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk

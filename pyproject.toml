@@ -1,0 +1,44 @@
+[project]
+name = "codeguardian"
+version = "0.1.0"
+description = "Análise de qualidade, dependências e segurança de repositórios Git públicos."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.143,<1",
+    "uvicorn>=0.54,<1",
+    "pydantic>=2.14,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1,<10",
+    "httpx>=0.28,<1",
+    "ruff>=0.16,<1",
+    "pip-audit>=2.10,<3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle (erros)
+    "W",   # pycodestyle (avisos)
+    "F",   # pyflakes
+    "I",   # isort (ordenação de imports)
+    "B",   # flake8-bugbear (bugs prováveis)
+    "UP",  # pyupgrade (sintaxe moderna)
+    "SIM", # flake8-simplify
+    "S",   # flake8-bandit (segurança)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# assert é o mecanismo padrão do pytest.
+"tests/**" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
