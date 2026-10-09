@@ -124,6 +124,28 @@ report.findings  # lista de RuffFinding
 - `completed` com `findings` vazio significa "nenhum achado"; `timeout` e
   `output_limit` significam análise incompleta; `failed`, falha da ferramenta.
 
+## Análise de dependências
+
+`app/dependency_audit.py` verifica vulnerabilidades conhecidas com pip-audit nas
+dependências declaradas em `requirements*.txt`, `pyproject.toml`, `Pipfile.lock`,
+`poetry.lock` e `uv.lock`:
+
+```python
+from app.dependency_audit import audit_dependencies
+
+report = audit_dependencies(path)
+report.status  # no_vulnerabilities | vulnerabilities_found | source_unavailable | failed ...
+report.packages  # pacote, versão, origem e vulnerabilidades (PYSEC/GHSA/CVE)
+report.unaudited  # o que não pôde ser verificado e por quê
+report.tool_version
+```
+
+Nada é instalado: apenas dependências com versão exata são enviadas ao pip-audit,
+por meio de um arquivo sanitizado, com `--no-deps --disable-pip`, em um subprocesso
+com ambiente mínimo. **A análise depende das dependências declaradas e das
+informações disponíveis na fonte de vulnerabilidades**; veja o escopo e os limites
+em [docs/dependencias.md](docs/dependencias.md).
+
 ## Estrutura
 
 ```
