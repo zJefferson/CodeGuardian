@@ -33,7 +33,8 @@ curl -X POST http://127.0.0.1:8000/analyses \
 ```
 
 `GET /analyses/{id}` retorna `status` (`queued`, `running`, `completed`, `failed`) e,
-quando concluída, `overall_status` e `approved` do relatório. `completed` significa
+quando concluída, `overall_status`, `approved` e `quality_score` (pontuação relativa ou `null`;
+veja [pontuacao.md](pontuacao.md)) do relatório. `completed` significa
 que há relatório — o relatório em si pode indicar falha (por exemplo, repositório
 inexistente). `failed` significa que nenhum relatório foi produzido.
 

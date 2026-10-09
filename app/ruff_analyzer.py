@@ -37,7 +37,8 @@ class RuffSettings(BaseModel):
     rules: tuple[str, ...] = DEFAULT_RULES
     timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     max_output_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
-    max_findings: int = Field(default=1000, gt=0)
+    # Achados truncados tornam a pontuação da análise estática indisponível.
+    max_findings: int = Field(default=5000, gt=0)
     poll_interval_seconds: float = Field(default=0.2, gt=0)
 
     @field_validator("rules")

@@ -196,6 +196,23 @@ contagem de achados, resultados do Ruff e do pip-audit, avisos e erros.
   ferramentas, sem trechos de código e sem caminhos do servidor; da estrutura entra
   apenas um resumo.
 
+## Pontuação de qualidade
+
+Cada relatório traz `quality`: uma pontuação de 0 a 100 calculada de forma determinística
+(sem IA) a partir dos resultados estruturados, com os fatores que a influenciaram.
+
+| Dimensão | Peso | Fonte |
+|---|---|---|
+| Análise estática | 40 | Ruff (achados ponderados por categoria e por arquivo) |
+| Dependências | 30 | pip-audit (pacotes vulneráveis) |
+| Práticas do projeto | 20 | testes, README, dependências declaradas e fixadas, docs |
+| Testes executados | 10 | pytest isolado, quando habilitado |
+
+Verificações que falharam ou não foram executadas ficam **indisponíveis** (nunca valem 0
+ou 100) e, nesse caso, a nota geral também fica indisponível. **A pontuação é um
+indicador relativo das verificações automatizadas, não uma medida absoluta da qualidade
+do software.** Fórmulas, pesos e exemplos: [docs/pontuacao.md](docs/pontuacao.md).
+
 ## Execução isolada de testes (opcional)
 
 `app/test_runner.py` pode executar os testes do repositório analisado com pytest,

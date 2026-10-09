@@ -72,6 +72,9 @@ class AnalysisStatusResponse(BaseModel):
         description="Resultado consolidado; disponível quando status = completed."
     )
     approved: bool | None
+    quality_score: float | None = Field(
+        description="Pontuação relativa (0 a 100) ou null se indisponível; detalhes no relatório."
+    )
     report_url: str | None
     error: str | None
 
@@ -188,6 +191,7 @@ def get_analysis_status(analysis_id: UUID, jobs: JobManagerDep) -> AnalysisStatu
         finished_at=job.finished_at,
         overall_status=report.overall_status if report else None,
         approved=report.approved if report else None,
+        quality_score=report.quality.score if report and report.quality else None,
         report_url=f"{_status_url(job.id)}/report" if report else None,
         error=job.error,
     )

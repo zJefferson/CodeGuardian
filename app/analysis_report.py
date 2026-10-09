@@ -10,6 +10,9 @@ e não altera ``overall_status``. Quando habilitada, falta de ambiente isolado o
 falhas de infraestrutura tornam a análise ``incomplete``, e testes reprovados
 contam como achados.
 
+``quality`` traz a pontuação explicável (``app/quality_score.py``), que é
+independente de ``approved`` e não é uma medida absoluta de qualidade.
+
 O relatório não inclui credenciais (a URL é a canônica, já validada), saídas
 brutas das ferramentas nem trechos de código; da análise estrutural entra
 apenas um resumo.
@@ -31,6 +34,7 @@ from app import __version__
 from app.dependency_audit import AuditSettings, AuditStatus, DependencyAuditReport
 from app.dependency_audit import audit_dependencies as _audit_dependencies
 from app.process_runner import ProcessTimeoutError, minimal_env, run_limited
+from app.quality_score import QualityScore, compute_quality_score
 from app.repository_clone import CloneError, CloneLimits, cloned_repository
 from app.repository_url import (
     GitHubRepository,
@@ -146,6 +150,7 @@ class AnalysisReport(BaseModel):
     tests: TestRunReport | None
     warnings: list[str]
     errors: list[str]
+    quality: QualityScore | None = None
 
     def to_json(self, *, indent: int | None = 2) -> str:
         return self.model_dump_json(indent=indent)
@@ -213,7 +218,7 @@ def build_report(
     errors += [c.message for c in checks if c.status is CheckStatus.FAILED and c.message]
 
     overall = _overall_status(checks, ruff, dependencies, tests, tests_error)
-    return AnalysisReport(
+    report = AnalysisReport(
         analysis_id=analysis_id,
         repository=(
             RepositoryInfo(url=repository.url, owner=repository.owner, name=repository.name)
@@ -248,6 +253,7 @@ def build_report(
         warnings=warnings,
         errors=errors,
     )
+    return report.model_copy(update={"quality": compute_quality_score(report)})
 
 
 def _structure_check(
