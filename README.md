@@ -50,6 +50,15 @@ ruff format --check . # formatação
 pip-audit -r requirements.txt  # vulnerabilidades conhecidas nas dependências
 ```
 
+## Validação de repositórios
+
+`app/repository_url.py` aceita somente URLs no formato
+`https://github.com/<usuário>/<repositório>` (opcionalmente com `.git` ou `/` final).
+São rejeitados: outros esquemas e hosts, portas diferentes de 443, credenciais
+embutidas, endereços IP, `localhost`, query/fragmento, caminhos codificados ou com
+segmentos extras e caracteres não ASCII. As mensagens de erro nunca reproduzem a URL
+recebida. Passar na validação não torna o repositório confiável.
+
 ## Estrutura
 
 ```
