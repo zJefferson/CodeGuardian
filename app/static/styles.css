@@ -498,6 +498,16 @@ td.num {
   margin-top: 0.2rem;
 }
 
+/* Coluna de arquivo larga o bastante para nomes comuns; quebra só em "/". */
+.findings td:first-child {
+  min-width: 16rem;
+}
+
+.findings td:first-child code {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .findings .filter {
   width: 100%;
   margin-top: 0.25rem;
