@@ -196,10 +196,28 @@ contagem de achados, resultados do Ruff e do pip-audit, avisos e erros.
   ferramentas, sem trechos de código e sem caminhos do servidor; da estrutura entra
   apenas um resumo.
 
+## Execução isolada de testes (opcional)
+
+`app/test_runner.py` pode executar os testes do repositório analisado com pytest,
+**somente** dentro de um container Docker descartável: sem rede, usuário sem
+privilégios, sistema de arquivos somente leitura, limites de CPU, memória, processos e
+tempo, sem credenciais do host e sem instalar dependências. Desabilitada por padrão:
+
+```powershell
+docker build -f docker/pytest-runner.Dockerfile -t codeguardian/pytest-runner:0.1.0 .
+$env:CODEGUARDIAN_TEST_EXECUTION = "enabled"
+$env:CODEGUARDIAN_TEST_IMAGE = "codeguardian/pytest-runner:0.1.0"
+uvicorn app.main:app
+```
+
+Sem Docker disponível, a etapa é marcada como ignorada; nunca há execução fora do
+container. Arquitetura, controles, resultados e riscos: [docs/testes-isolados.md](docs/testes-isolados.md).
+
 ## Estrutura
 
 ```
 app/      código da aplicação
+docker/   imagem do ambiente isolado de testes
 docs/     documentação técnica
 tests/    testes automatizados
 ```

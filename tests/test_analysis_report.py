@@ -163,7 +163,11 @@ def test_complete_report_without_findings() -> None:
 
     assert report.overall_status is OverallStatus.NO_ISSUES_FOUND
     assert report.approved is True
-    assert set(statuses(report).values()) == {CheckStatus.COMPLETED}
+    # Execução de testes desabilitada: aparece como skipped e não afeta o resultado.
+    assert statuses(report)[CheckName.TESTS] is CheckStatus.SKIPPED
+    assert {s for n, s in statuses(report).items() if n is not CheckName.TESTS} == {
+        CheckStatus.COMPLETED
+    }
     assert report.analysis_id == "analysis-1"
     assert report.repository is not None
     assert report.repository.url == "https://github.com/psf/requests"
@@ -193,7 +197,11 @@ def test_complete_report_with_findings() -> None:
 
     assert report.overall_status is OverallStatus.ISSUES_FOUND
     assert report.approved is False
-    assert set(statuses(report).values()) == {CheckStatus.COMPLETED}
+    # Execução de testes desabilitada: aparece como skipped e não afeta o resultado.
+    assert statuses(report)[CheckName.TESTS] is CheckStatus.SKIPPED
+    assert {s for n, s in statuses(report).items() if n is not CheckName.TESTS} == {
+        CheckStatus.COMPLETED
+    }
     assert report.finding_counts.ruff_findings == 2
     assert report.finding_counts.vulnerabilities == 1
     assert report.finding_counts.vulnerable_packages == 1
@@ -296,6 +304,7 @@ def test_clone_failure_skips_analysis() -> None:
         CheckName.STRUCTURE: CheckStatus.SKIPPED,
         CheckName.RUFF: CheckStatus.SKIPPED,
         CheckName.DEPENDENCIES: CheckStatus.SKIPPED,
+        CheckName.TESTS: CheckStatus.SKIPPED,
     }
     assert (report.structure, report.ruff, report.dependencies) == (None, None, None)
     assert report.finding_counts.ruff_findings is None

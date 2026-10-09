@@ -1,6 +1,6 @@
 """Ponto de entrada da API CodeGuardian."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -8,9 +8,10 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app import __version__
-from app.analysis_report import AnalysisReport, analyze_repository
+from app.analysis_report import AnalysisReport, AnalysisSettings, analyze_repository
 from app.api import register_error_handlers, router
 from app.jobs import JobManager
+from app.test_runner import TestExecutionSettings
 
 
 class HealthResponse(BaseModel):
@@ -19,8 +20,11 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
 
 
-def _run_analysis(repository_url: str, analysis_id: str) -> AnalysisReport:
-    return analyze_repository(repository_url, analysis_id=analysis_id)
+def _analysis_runner(settings: AnalysisSettings) -> Callable[[str, str], AnalysisReport]:
+    def run(repository_url: str, analysis_id: str) -> AnalysisReport:
+        return analyze_repository(repository_url, settings=settings, analysis_id=analysis_id)
+
+    return run
 
 
 def create_app(job_manager: JobManager | None = None) -> FastAPI:
@@ -28,7 +32,10 @@ def create_app(job_manager: JobManager | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        manager = job_manager or JobManager(_run_analysis)
+        # A execução isolada de testes só é ativada por configuração explícita
+        # (CODEGUARDIAN_TEST_EXECUTION=enabled e CODEGUARDIAN_TEST_IMAGE).
+        settings = AnalysisSettings(tests=TestExecutionSettings.from_env())
+        manager = job_manager or JobManager(_analysis_runner(settings))
         app.state.job_manager = manager
         try:
             yield

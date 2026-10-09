@@ -407,6 +407,7 @@ def test_end_to_end_with_simulated_github_and_pypi(
         "structure": "completed",
         "ruff": "completed",
         "dependencies": "completed",
+        "tests": "skipped",  # execução de testes desabilitada por padrão
     }
     assert report["finding_counts"]["ruff_findings"] == 1
     assert report["ruff"]["findings"][0]["rule"] == "F401"

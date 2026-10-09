@@ -5,6 +5,11 @@ produziram: uma etapa que não executou aparece como ``skipped`` e nunca é
 preenchida com valores presumidos. ``approved`` só é verdadeiro quando todas as
 verificações aplicáveis foram concluídas por completo e sem achados.
 
+A execução de testes é opcional: quando desabilitada, aparece como ``skipped``
+e não altera ``overall_status``. Quando habilitada, falta de ambiente isolado ou
+falhas de infraestrutura tornam a análise ``incomplete``, e testes reprovados
+contam como achados.
+
 O relatório não inclui credenciais (a URL é a canônica, já validada), saídas
 brutas das ferramentas nem trechos de código; da análise estrutural entra
 apenas um resumo.
@@ -44,6 +49,8 @@ from app.structure_analyzer import (
     TestsInfo,
 )
 from app.structure_analyzer import analyze_structure as _analyze_structure
+from app.test_runner import TestExecutionSettings, TestRunReport, TestRunStatus
+from app.test_runner import run_repository_tests as _run_repository_tests
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +62,7 @@ class CheckName(StrEnum):
     STRUCTURE = "structure"
     RUFF = "ruff"
     DEPENDENCIES = "dependencies"
+    TESTS = "tests"  # execução opcional e isolada com pytest
 
 
 class CheckStatus(StrEnum):
@@ -86,6 +94,7 @@ class FindingCounts(BaseModel):
     vulnerabilities: int | None
     vulnerable_packages: int | None
     unaudited_dependencies: int | None
+    test_failures: int | None
 
 
 class ToolVersions(BaseModel):
@@ -94,6 +103,7 @@ class ToolVersions(BaseModel):
     git: str | None
     ruff: str | None
     pip_audit: str | None
+    docker: str | None
 
 
 class RepositoryInfo(BaseModel):
@@ -133,6 +143,7 @@ class AnalysisReport(BaseModel):
     structure: StructureSummary | None
     ruff: RuffReport | None
     dependencies: DependencyAuditReport | None
+    tests: TestRunReport | None
     warnings: list[str]
     errors: list[str]
 
@@ -153,6 +164,7 @@ class AnalysisSettings(BaseModel):
     structure: StructureLimits = StructureLimits()
     ruff: RuffSettings = RuffSettings()
     audit: AuditSettings = AuditSettings()
+    tests: TestExecutionSettings = TestExecutionSettings()
 
 
 # --- Consolidação ----------------------------------------------------------------
@@ -172,6 +184,8 @@ def build_report(
     ruff_error: str | None = None,
     dependencies: DependencyAuditReport | None = None,
     dependencies_error: str | None = None,
+    tests: TestRunReport | None = None,
+    tests_error: str | None = None,
     git_version: str | None = None,
 ) -> AnalysisReport:
     """Consolida os resultados produzidos pelas etapas da análise.
@@ -194,10 +208,11 @@ def build_report(
         _structure_check(structure, structure_error, warnings),
         _ruff_check(ruff, ruff_error, warnings),
         _dependencies_check(dependencies, dependencies_error, warnings),
+        _tests_check(tests, tests_error, warnings),
     ]
     errors += [c.message for c in checks if c.status is CheckStatus.FAILED and c.message]
 
-    overall = _overall_status(checks, ruff, dependencies)
+    overall = _overall_status(checks, ruff, dependencies, tests, tests_error)
     return AnalysisReport(
         analysis_id=analysis_id,
         repository=(
@@ -214,6 +229,7 @@ def build_report(
             git=git_version,
             ruff=ruff.tool_version if ruff else None,
             pip_audit=dependencies.tool_version if dependencies else None,
+            docker=tests.docker_version if tests else None,
         ),
         overall_status=overall,
         approved=overall is OverallStatus.NO_ISSUES_FOUND,
@@ -223,10 +239,12 @@ def build_report(
             vulnerabilities=_audit_count(dependencies, "vulnerability_count"),
             vulnerable_packages=_audit_count(dependencies, "vulnerable_package_count"),
             unaudited_dependencies=len(dependencies.unaudited) if dependencies else None,
+            test_failures=_test_failures(tests),
         ),
         structure=_summarize_structure(structure),
         ruff=ruff,
         dependencies=dependencies,
+        tests=tests,
         warnings=warnings,
         errors=errors,
     )
@@ -329,27 +347,87 @@ def _dependencies_check(
     )
 
 
+_TEST_STATUS = {
+    TestRunStatus.DISABLED: CheckStatus.SKIPPED,
+    TestRunStatus.SKIPPED_UNAVAILABLE: CheckStatus.SKIPPED,
+    TestRunStatus.NO_TESTS: CheckStatus.NOT_APPLICABLE,
+    TestRunStatus.PASSED: CheckStatus.COMPLETED,
+    TestRunStatus.FAILED: CheckStatus.COMPLETED,
+    TestRunStatus.COLLECTION_ERROR: CheckStatus.FAILED,
+    TestRunStatus.PYTEST_ERROR: CheckStatus.FAILED,
+    TestRunStatus.TIMEOUT: CheckStatus.FAILED,
+    TestRunStatus.RESOURCE_LIMIT: CheckStatus.FAILED,
+    TestRunStatus.INFRASTRUCTURE_ERROR: CheckStatus.FAILED,
+}
+
+
+def _tests_check(
+    report: TestRunReport | None, error: str | None, warnings: list[str]
+) -> CheckSummary:
+    if report is None:
+        status = CheckStatus.FAILED if error else CheckStatus.SKIPPED
+        return CheckSummary(
+            name=CheckName.TESTS,
+            status=status,
+            tool_status=None,
+            finding_count=None,
+            message=error,
+        )
+    if report.status is TestRunStatus.SKIPPED_UNAVAILABLE and report.message:
+        warnings.append(f"Testes: {report.message}")
+    return CheckSummary(
+        name=CheckName.TESTS,
+        status=_TEST_STATUS[report.status],
+        tool_status=report.status.value,
+        finding_count=_test_failures(report),
+        message=report.message,
+    )
+
+
+def _tests_requested(tests: TestRunReport | None, tests_error: str | None) -> bool:
+    """A execução de testes só pesa no resultado quando foi habilitada."""
+    if tests_error is not None:
+        return True
+    return tests is not None and tests.status is not TestRunStatus.DISABLED
+
+
+def _test_failures(report: TestRunReport | None) -> int | None:
+    if report is None or report.status not in {TestRunStatus.PASSED, TestRunStatus.FAILED}:
+        return None
+    if report.counts is None:
+        return 0 if report.status is TestRunStatus.PASSED else None
+    return report.counts.failed + report.counts.errors
+
+
 def _overall_status(
     checks: list[CheckSummary],
     ruff: RuffReport | None,
     dependencies: DependencyAuditReport | None,
+    tests: TestRunReport | None,
+    tests_error: str | None,
 ) -> OverallStatus:
     by_name = {c.name: c for c in checks}
     if by_name[CheckName.REPOSITORY].status is not CheckStatus.COMPLETED:
         return OverallStatus.FAILED
-    analysis = [by_name[n] for n in (CheckName.STRUCTURE, CheckName.RUFF, CheckName.DEPENDENCIES)]
-    if all(c.status in {CheckStatus.FAILED, CheckStatus.SKIPPED} for c in analysis):
+    static = [by_name[n] for n in (CheckName.STRUCTURE, CheckName.RUFF, CheckName.DEPENDENCIES)]
+    if all(c.status in {CheckStatus.FAILED, CheckStatus.SKIPPED} for c in static):
         return OverallStatus.FAILED
+    considered = list(static)
+    tests_requested = _tests_requested(tests, tests_error)
+    if tests_requested:
+        considered.append(by_name[CheckName.TESTS])
     if any(
-        c.status in {CheckStatus.FAILED, CheckStatus.SKIPPED, CheckStatus.PARTIAL} for c in analysis
+        c.status in {CheckStatus.FAILED, CheckStatus.SKIPPED, CheckStatus.PARTIAL}
+        for c in considered
     ):
         return OverallStatus.INCOMPLETE
-    if (_ruff_count(ruff) or 0) + (_audit_count(dependencies, "vulnerability_count") or 0) > 0:
+    issues = (_ruff_count(ruff) or 0) + (_audit_count(dependencies, "vulnerability_count") or 0)
+    if issues > 0 or (tests is not None and tests.status is TestRunStatus.FAILED):
         return OverallStatus.ISSUES_FOUND
-    if all(
-        by_name[n].status is CheckStatus.NOT_APPLICABLE
-        for n in (CheckName.RUFF, CheckName.DEPENDENCIES)
-    ):
+    applicable = [CheckName.RUFF, CheckName.DEPENDENCIES]
+    if tests_requested:
+        applicable.append(CheckName.TESTS)
+    if all(by_name[n].status is CheckStatus.NOT_APPLICABLE for n in applicable):
         return OverallStatus.NOTHING_TO_ANALYZE
     return OverallStatus.NO_ISSUES_FOUND
 
@@ -397,6 +475,8 @@ class _StepResults:
     ruff_error: str | None = None
     dependencies: DependencyAuditReport | None = None
     dependencies_error: str | None = None
+    tests: TestRunReport | None = None
+    tests_error: str | None = None
 
 
 def analyze_repository(
@@ -445,6 +525,8 @@ def analyze_repository(
         ruff_error=results.ruff_error,
         dependencies=results.dependencies,
         dependencies_error=results.dependencies_error,
+        tests=results.tests,
+        tests_error=results.tests_error,
         git_version=git_version() if repository is not None else None,
     )
 
@@ -476,6 +558,12 @@ def _run_steps(path: Path, settings: AnalysisSettings, results: _StepResults) ->
     except Exception:
         logger.exception("Erro inesperado na auditoria de dependências.")
         results.dependencies_error = "Erro interno na auditoria de dependências."
+
+    try:
+        results.tests = _run_repository_tests(path, settings.tests, structure=results.structure)
+    except Exception:
+        logger.exception("Erro inesperado na execução isolada de testes.")
+        results.tests_error = "Erro interno na execução isolada de testes."
 
 
 def git_version() -> str | None:
