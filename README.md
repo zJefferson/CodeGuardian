@@ -231,6 +231,22 @@ ou 100) e, nesse caso, a nota geral também fica indisponível. **A pontuação 
 indicador relativo das verificações automatizadas, não uma medida absoluta da qualidade
 do software.** Fórmulas, pesos e exemplos: [docs/pontuacao.md](docs/pontuacao.md).
 
+## Explicações com IA local (opcional)
+
+Com o [Ollama](https://ollama.com) instalado e um modelo baixado, a interface pode
+explicar cada achado em linguagem simples e sugerir correções:
+
+```powershell
+ollama pull qwen2.5-coder:7b
+$env:CODEGUARDIAN_AI_EXPLANATIONS = "enabled"
+uvicorn app.main:app
+```
+
+O modelo roda localmente (somente endereços de loopback); apenas os campos estruturados
+do achado escolhido são enviados, sem código-fonte. A explicação é exibida à parte e não
+altera o relatório nem a pontuação; todas as análises funcionam sem IA. Configuração,
+API, limites e riscos: [docs/ia-local.md](docs/ia-local.md).
+
 ## Execução isolada de testes (opcional)
 
 `app/test_runner.py` pode executar os testes do repositório analisado com pytest,

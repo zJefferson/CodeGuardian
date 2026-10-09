@@ -238,12 +238,21 @@ const api = {
     }),
   status: (id) => request(`/analyses/${encodeURIComponent(id)}`),
   report: (id) => request(`/analyses/${encodeURIComponent(id)}/report`),
+  aiStatus: () => request("/ai/status"),
+  explain: (id, payload) =>
+    request(`/analyses/${encodeURIComponent(id)}/explanations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
 };
 
 /* --- Estado da página -------------------------------------------------------- */
 
 const ui = {};
 let pollToken = 0;
+let aiEnabled = false;
+let currentAnalysisId = null;
 
 function init() {
   ui.form = document.getElementById("analysis-form");
@@ -259,7 +268,17 @@ function init() {
 
   ui.form.addEventListener("submit", onSubmit);
   window.addEventListener("hashchange", resumeFromHash);
-  resumeFromHash();
+  loadAiStatus().finally(resumeFromHash);
+}
+
+async function loadAiStatus() {
+  // As explicações são opcionais: qualquer falha aqui apenas oculta os botões.
+  try {
+    const status = await api.aiStatus();
+    aiEnabled = Boolean(status && status.enabled);
+  } catch {
+    aiEnabled = false;
+  }
 }
 
 function setBusy(busy) {
@@ -411,6 +430,7 @@ function clearResults() {
 /* --- Relatório ----------------------------------------------------------------- */
 
 function renderReport(report) {
+  currentAnalysisId = report.analysis_id;
   ui.results.replaceChildren(
     renderSummary(report),
     renderChecks(report),
@@ -647,12 +667,14 @@ function renderFindingsTable(findings) {
       .some((value) => value.toLowerCase().includes(term));
   }
 
+  const indexed = findings.map((finding, index) => ({ finding, index }));
+
   function update() {
     const term = filter.value.trim().toLowerCase();
-    const filtered = findings.filter((finding) => matches(finding, term));
+    const filtered = indexed.filter((item) => matches(item.finding, term));
     const page = filtered.slice(0, visible);
     body.replaceChildren(
-      ...page.map((finding) =>
+      ...page.map(({ finding, index }) =>
         el(
           "tr",
           {},
@@ -664,6 +686,7 @@ function renderFindingsTable(findings) {
             {},
             el("span", { text: finding.message }),
             finding.suggestion ? el("span", { class: "suggestion", text: `Sugestão: ${finding.suggestion}` }) : null,
+            aiEnabled ? explainControl({ kind: "ruff_finding", finding_index: index }) : null,
           ),
         ),
       ),
@@ -729,7 +752,12 @@ function renderDependencies(audit) {
           safeLink(`https://osv.dev/vulnerability/${encodeURIComponent(vuln.id)}`, vuln.id),
           (vuln.aliases || []).join(", ") || "—",
           (vuln.fix_versions || []).join(", ") || "sem correção informada",
-          (pkg.sources || []).join(", "),
+          [
+            (pkg.sources || []).join(", "),
+            aiEnabled
+              ? explainControl({ kind: "vulnerability", package: pkg.name, vulnerability_id: vuln.id })
+              : null,
+          ],
         ]);
       }
     }
@@ -774,6 +802,53 @@ function renderTests(tests) {
           ["Ignorados", formatNumber(counts.skipped)],
         ])
       : null,
+  );
+}
+
+/* --- Explicações com IA local (opcional) ------------------------------------ */
+
+const EXPLANATION_STATUS = {
+  disabled: "As explicações com IA estão desabilitadas no servidor.",
+  unavailable: "O modelo de IA local não está disponível.",
+  timeout: "O modelo de IA local não respondeu a tempo.",
+  invalid_response: "A resposta do modelo foi descartada por não seguir o formato esperado.",
+  busy: "Há muitas explicações em andamento. Tente novamente em instantes.",
+  failed: "Não foi possível gerar a explicação.",
+};
+
+function explainControl(payload) {
+  const container = el("div", { class: "explain" });
+  const button = el("button", { type: "button", class: "button small-button", text: "Explicar com IA" });
+  const output = el("div", { class: "explanation", "aria-live": "polite" });
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    output.replaceChildren(el("p", { class: "muted small", text: "Gerando explicação com IA local…" }));
+    try {
+      const result = await api.explain(currentAnalysisId, payload);
+      output.replaceChildren(renderExplanation(result));
+    } catch (error) {
+      output.replaceChildren(notice(error.message, "danger"));
+    } finally {
+      button.disabled = false;
+      button.textContent = "Explicar novamente";
+    }
+  });
+  return append(container, [button, output]);
+}
+
+function renderExplanation(result) {
+  if (result.status !== "completed" || !result.explanation) {
+    return notice(result.message || EXPLANATION_STATUS[result.status] || "Explicação indisponível.", "warning");
+  }
+  const { summary, explanation, suggested_fix: fix } = result.explanation;
+  return el(
+    "div",
+    { class: "explanation-body" },
+    el("p", { class: "explanation-label", text: `Explicação gerada por IA local${result.model ? ` (${result.model})` : ""}` }),
+    el("p", {}, el("strong", { text: summary })),
+    el("p", { text: explanation }),
+    el("p", {}, el("strong", { text: "Como corrigir: " }), fix),
+    el("p", { class: "muted small", text: result.disclaimer }),
   );
 }
 

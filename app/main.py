@@ -8,8 +8,10 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app import __version__
+from app.ai_explainer import AISettings, Explainer
 from app.analysis_report import AnalysisReport, AnalysisSettings, analyze_repository
 from app.api import register_error_handlers, router
+from app.explanations_api import router as explanations_router
 from app.jobs import JobManager
 from app.test_runner import TestExecutionSettings
 from app.web import register_web
@@ -28,8 +30,10 @@ def _analysis_runner(settings: AnalysisSettings) -> Callable[[str, str], Analysi
     return run
 
 
-def create_app(job_manager: JobManager | None = None) -> FastAPI:
-    """Cria a aplicação. ``job_manager`` permite injetar um gerenciador (testes)."""
+def create_app(
+    job_manager: JobManager | None = None, explainer: Explainer | None = None
+) -> FastAPI:
+    """Cria a aplicação. ``job_manager`` e ``explainer`` podem ser injetados (testes)."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -38,6 +42,8 @@ def create_app(job_manager: JobManager | None = None) -> FastAPI:
         settings = AnalysisSettings(tests=TestExecutionSettings.from_env())
         manager = job_manager or JobManager(_analysis_runner(settings))
         app.state.job_manager = manager
+        # Explicações com IA local: opcionais, só com CODEGUARDIAN_AI_EXPLANATIONS=enabled.
+        app.state.explainer = explainer or Explainer(AISettings.from_env())
         try:
             yield
         finally:
@@ -51,6 +57,7 @@ def create_app(job_manager: JobManager | None = None) -> FastAPI:
     )
     register_error_handlers(app)
     app.include_router(router)
+    app.include_router(explanations_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     def health() -> HealthResponse:

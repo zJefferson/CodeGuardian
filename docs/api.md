@@ -10,6 +10,8 @@ consultado depois. Nenhuma requisição aguarda a análise terminar.
 | `POST /analyses` | `202` + cabeçalho `Location` | `422` entrada inválida, `413` corpo grande demais, `503` capacidade esgotada (com `Retry-After`) |
 | `GET /analyses/{analysis_id}` | `200` status | `404` não encontrada/expirada, `422` id inválido |
 | `GET /analyses/{analysis_id}/report` | `200` relatório JSON | `404`, `409` ainda em execução ou falhou sem relatório, `422` |
+| `GET /ai/status` | `200` status das explicações com IA | — |
+| `POST /analyses/{analysis_id}/explanations` | `200` explicação (com `status` próprio; ver [ia-local.md](ia-local.md)) | `404` análise/achado inexistente, `409` relatório indisponível, `422` |
 | `GET /health` | `200` | — |
 
 Documentação interativa: `/docs` (Swagger) e `/openapi.json`.

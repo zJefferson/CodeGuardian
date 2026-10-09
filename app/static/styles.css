@@ -630,3 +630,38 @@ td.num {
     grid-template-columns: 6rem 1fr 3rem;
   }
 }
+
+/* Explicações com IA local (opcionais) */
+
+.explain {
+  margin-top: 0.4rem;
+}
+
+.small-button {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.82rem;
+}
+
+.explanation:empty {
+  display: none;
+}
+
+.explanation-body {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--info);
+  background: var(--info-bg);
+  border-radius: 6px;
+}
+
+.explanation-body p {
+  margin: 0.3rem 0;
+}
+
+.explanation-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--info);
+}

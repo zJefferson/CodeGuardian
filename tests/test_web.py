@@ -90,6 +90,8 @@ def test_index_not_in_openapi(client: TestClient) -> None:
         "/analyses",
         "/analyses/{analysis_id}",
         "/analyses/{analysis_id}/report",
+        "/analyses/{analysis_id}/explanations",
+        "/ai/status",
         "/health",
     }
 
@@ -131,7 +133,7 @@ def test_links_from_report_only_allow_https() -> None:
 def test_app_js_only_calls_existing_api_endpoints() -> None:
     called = set(re.findall(r'request\(\s*[`"](/[^`"$]*)', APP_JS))
 
-    assert called == {"/analyses", "/analyses/"}
+    assert called == {"/analyses", "/analyses/", "/ai/status"}
 
 
 def test_static_dir_contains_only_interface_files() -> None:
