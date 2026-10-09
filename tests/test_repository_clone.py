@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app import repository_clone
+from app import process_runner, repository_clone
 from app.repository_clone import (
     CloneFailedError,
     CloneLimits,
@@ -83,7 +83,7 @@ def fake_git(monkeypatch: pytest.MonkeyPatch) -> Callable[..., PopenSpy]:
 
     def install(**process_kwargs: Any) -> PopenSpy:
         spy = PopenSpy(**process_kwargs)
-        monkeypatch.setattr(repository_clone.subprocess, "Popen", spy)
+        monkeypatch.setattr(process_runner.subprocess, "Popen", spy)
         return spy
 
     return install
@@ -239,7 +239,7 @@ def test_failure_to_start_git_is_handled(
     def broken_popen(*_args: Any, **_kwargs: Any) -> None:
         raise OSError("exec format error")
 
-    monkeypatch.setattr(repository_clone.subprocess, "Popen", broken_popen)
+    monkeypatch.setattr(process_runner.subprocess, "Popen", broken_popen)
 
     with (
         pytest.raises(CloneFailedError, match="iniciar o Git"),

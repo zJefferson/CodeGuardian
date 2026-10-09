@@ -9,17 +9,20 @@ import logging
 import os
 import shutil
 import stat
-import subprocess
 import tempfile
-import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import IO
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.process_runner import (
+    ProcessAbortedError,
+    ProcessTimeoutError,
+    minimal_env,
+    run_limited,
+)
 from app.repository_url import (
     GitHubRepository,
     InvalidRepositoryURLError,
@@ -30,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 _WORKDIR_PREFIX = "codeguardian-"
 _CLONE_DIRNAME = "repo"
-_READ_CHUNK_BYTES = 4096
 
 # Configurações aplicadas via "-c", com precedência sobre qualquer outra fonte.
 _GIT_CONFIG: tuple[tuple[str, str], ...] = (
@@ -46,10 +48,6 @@ _GIT_CONFIG: tuple[tuple[str, str], ...] = (
     ("transfer.fsckObjects", "true"),
     ("submodule.recurse", "false"),
 )
-
-# Variáveis do ambiente do processo herdadas pelo Git. Todo o resto
-# (tokens, chaves de API etc.) é descartado.
-_INHERITED_ENV_VARS = ("PATH", "SYSTEMROOT")
 
 
 class CloneLimits(BaseModel):
@@ -167,8 +165,7 @@ def _build_command(git: str, url: str, destination: Path) -> list[str]:
 
 
 def _build_env(home: Path) -> dict[str, str]:
-    env = {name: os.environ[name] for name in _INHERITED_ENV_VARS if name in os.environ}
-    env.update(
+    return minimal_env(
         {
             # Ignora configurações de sistema e do usuário (ex.: credential.helper).
             "GIT_CONFIG_NOSYSTEM": "1",
@@ -184,59 +181,32 @@ def _build_env(home: Path) -> dict[str, str]:
             "LC_ALL": "C",
         }
     )
-    return env
 
 
 def _clone(git: str, url: str, destination: Path, workdir: Path, limits: CloneLimits) -> None:
     command = _build_command(git, url, destination)
     try:
-        process = subprocess.Popen(  # noqa: S603 - argumentos fixos, sem shell
+        result = run_limited(
             command,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
             cwd=workdir,
             env=_build_env(workdir),
-            shell=False,
+            timeout_seconds=limits.timeout_seconds,
+            max_output_bytes=limits.max_output_bytes,
+            poll_interval_seconds=limits.poll_interval_seconds,
+            abort_check=lambda: _directory_size(destination) > limits.max_repository_bytes,
         )
     except OSError as exc:
         raise CloneFailedError("Não foi possível iniciar o Git.") from exc
+    except ProcessTimeoutError:
+        raise CloneTimeoutError("A clonagem excedeu o tempo limite.") from None
+    except ProcessAbortedError:
+        raise CloneSizeLimitError("O repositório excede o tamanho máximo permitido.") from None
 
-    reader = _BoundedReader(process.stderr, limits.max_output_bytes)
-    reader.start()
-    try:
-        returncode = _wait(process, destination, limits)
-    finally:
-        reader.join(timeout=limits.poll_interval_seconds * 4)
-
-    if returncode != 0:
-        raise CloneFailedError(_failure_message(reader.text), detail=reader.text)
+    if result.returncode != 0:
+        detail = result.stderr_text
+        raise CloneFailedError(_failure_message(detail), detail=detail)
     if _directory_size(destination) > limits.max_repository_bytes:
         raise CloneSizeLimitError("O repositório excede o tamanho máximo permitido.")
-
-
-def _wait(process: subprocess.Popen[bytes], destination: Path, limits: CloneLimits) -> int:
-    """Aguarda o Git, interrompendo-o se exceder o tempo ou o tamanho."""
-    deadline = time.monotonic() + limits.timeout_seconds
-    while True:
-        try:
-            return process.wait(timeout=limits.poll_interval_seconds)
-        except subprocess.TimeoutExpired:
-            pass
-        if time.monotonic() >= deadline:
-            _kill(process)
-            raise CloneTimeoutError("A clonagem excedeu o tempo limite.")
-        if _directory_size(destination) > limits.max_repository_bytes:
-            _kill(process)
-            raise CloneSizeLimitError("O repositório excede o tamanho máximo permitido.")
-
-
-def _kill(process: subprocess.Popen[bytes]) -> None:
-    process.kill()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        logger.warning("Processo do Git não terminou após kill (pid=%s).", process.pid)
 
 
 def _failure_message(stderr: str) -> str:
@@ -290,33 +260,3 @@ def _remove_tree(path: Path, attempts: int = 3) -> None:
                 logger.warning("Não foi possível remover o diretório temporário %s.", path)
                 return
             time.sleep(0.2 * attempt)
-
-
-class _BoundedReader(threading.Thread):
-    """Lê um stream até o fim, guardando no máximo ``limit`` bytes.
-
-    Continuar lendo após o limite evita que o Git bloqueie com o pipe cheio.
-    """
-
-    def __init__(self, stream: IO[bytes] | None, limit: int) -> None:
-        super().__init__(daemon=True)
-        self._stream = stream
-        self._limit = limit
-        self._buffer = bytearray()
-
-    def run(self) -> None:
-        if self._stream is None:
-            return
-        try:
-            while chunk := self._stream.read(_READ_CHUNK_BYTES):
-                remaining = self._limit - len(self._buffer)
-                if remaining > 0:
-                    self._buffer += chunk[:remaining]
-        except (OSError, ValueError):
-            pass  # stream fechado após kill
-        finally:
-            self._stream.close()
-
-    @property
-    def text(self) -> str:
-        return self._buffer.decode("utf-8", errors="replace").strip()

@@ -101,6 +101,29 @@ junções nunca são seguidos. A varredura tem limites de profundidade e de núm
 arquivos; quando um limite é atingido, `complete` é `False` e o motivo aparece em
 `limitations` (análise incompleta não é o mesmo que ausência de achados).
 
+## Análise estática com Ruff
+
+`app/ruff_analyzer.py` executa `ruff check` sobre o repositório clonado e retorna um
+`RuffReport` (Pydantic) com arquivo, linha, coluna, regra, mensagem e sugestão de
+correção de cada achado:
+
+```python
+from app.ruff_analyzer import RuffSettings, analyze_with_ruff
+
+report = analyze_with_ruff(path)  # regras padrão: E4, E7, E9, F, B, S
+report.status  # completed | no_python_files | timeout | output_limit | failed
+report.findings  # lista de RuffFinding
+```
+
+- O Ruff só lê os arquivos; nada é importado nem executado.
+- `--isolated`: a configuração do repositório analisado (`pyproject.toml`, `ruff.toml`)
+  é ignorada, pois é controlada por terceiros. As regras são definidas pelo CodeGuardian.
+- `--no-cache` e `--no-fix`: nada é gravado no repositório.
+- Limites de tempo, de bytes de saída e de número de achados; o subprocesso recebe um
+  ambiente mínimo, sem segredos.
+- `completed` com `findings` vazio significa "nenhum achado"; `timeout` e
+  `output_limit` significam análise incompleta; `failed`, falha da ferramenta.
+
 ## Estrutura
 
 ```
