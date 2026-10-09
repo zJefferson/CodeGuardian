@@ -3,7 +3,7 @@
 Ferramenta para analisar repositórios Git públicos: qualidade de código, verificação de
 dependências, checagens automatizadas e geração de relatórios técnicos.
 
-> Status: configuração inicial. A API e as análises ainda não foram implementadas.
+> Status: API mínima com verificação de saúde. As análises ainda não foram implementadas.
 
 ## Requisitos
 
@@ -26,12 +26,27 @@ Em Linux/macOS, ative o ambiente com `source .venv/bin/activate`.
 O `requirements.txt` fixa todas as versões, incluindo as transitivas, para instalações
 reproduzíveis. As dependências diretas estão declaradas em `pyproject.toml`.
 
-## Verificações
+## Executando a API
+
+Com o ambiente virtual ativado:
 
 ```powershell
+uvicorn app.main:app --reload
+```
+
+- API: <http://127.0.0.1:8000>
+- Verificação de saúde: <http://127.0.0.1:8000/health> → `{"status": "ok"}`
+- Documentação interativa (Swagger): <http://127.0.0.1:8000/docs>
+
+`--reload` é apenas para desenvolvimento. Por padrão o servidor escuta somente em `127.0.0.1`.
+
+## Testes e verificações
+
+```powershell
+pytest                # testes
+pytest -v             # testes com saída detalhada
 ruff check .          # lint
 ruff format --check . # formatação
-pytest                # testes
 pip-audit -r requirements.txt  # vulnerabilidades conhecidas nas dependências
 ```
 
